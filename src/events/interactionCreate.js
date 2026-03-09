@@ -8,6 +8,9 @@ module.exports = {
         if (!interaction.isChatInputCommand() && !interaction.isButton()) return;
 
         if (interaction.isChatInputCommand()) {
+            if (interaction.user.id !== OWNER_ID) {
+                return interaction.reply({ content: 'Only the bot owner can use slash commands.', flags: 64 });
+            }
             const command = client.commands.get(interaction.commandName);
 
             if (!command) {
