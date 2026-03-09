@@ -74,13 +74,18 @@ module.exports = {
             if (!message.member.permissions.has(ADMIN_PERM)) return message.reply('Admin only.');
 
             message.reply('Pulling latest git repository and restarting PM2...');
+            const logFile = path.join(process.cwd(), 'git_commands.log');
             exec('git pull && pm2 restart all', (error, stdout, stderr) => {
+                const timestamp = new Date().toISOString();
+                const logEntry = `\n[${timestamp}] RESTART\nSTDOUT: ${stdout}\nSTDERR: ${stderr}\nERROR: ${error ? error.message : 'None'}\n${'='.repeat(50)}\n`;
+                fs.appendFileSync(logFile, logEntry);
+
                 if (error) {
                     console.error(`exec error: ${error}`);
                     return message.channel.send(`Error executing command:\n\`\`\`bash\n${error.message}\n\`\`\``);
                 }
                 const output = stdout ? stdout : stderr;
-                message.channel.send(`Command Output:\n\`\`\`bash\n${output}\n\`\`\``);
+                message.channel.send(`Command Output:\n\`\`\`bash\n${output.slice(0, 1900)}\n\`\`\``);
             });
         }
 
@@ -89,7 +94,12 @@ module.exports = {
             if (!message.member.permissions.has(ADMIN_PERM)) return message.reply('Admin only.');
 
             message.reply('Stashing current git changes...');
+            const logFile = path.join(process.cwd(), 'git_commands.log');
             exec('git stash', (error, stdout, stderr) => {
+                const timestamp = new Date().toISOString();
+                const logEntry = `\n[${timestamp}] STASH\nSTDOUT: ${stdout}\nSTDERR: ${stderr}\nERROR: ${error ? error.message : 'None'}\n${'='.repeat(50)}\n`;
+                fs.appendFileSync(logFile, logEntry);
+
                 if (error) {
                     console.error(`exec error: ${error}`);
                     return message.channel.send(`Error executing command:\n\`\`\`bash\n${error.message}\n\`\`\``);
@@ -103,13 +113,13 @@ module.exports = {
         if (commandName === 'git' && args[0] === 'v') {
             if (!message.member.permissions.has(ADMIN_PERM)) return message.reply('Admin only.');
 
-            exec('git log -1 --oneline', (error, stdout, stderr) => {
+            exec('git --version && git log -1 --oneline', (error, stdout, stderr) => {
                 if (error) {
                     console.error(`exec error: ${error}`);
                     return message.channel.send(`Error executing command:\n\`\`\`bash\n${error.message}\n\`\`\``);
                 }
                 const output = stdout ? stdout : stderr;
-                message.reply(`Current Version Hash:\n\`\`\`bash\n${output}\n\`\`\``);
+                message.reply(`Git Version & Last Commit:\n\`\`\`bash\n${output}\n\`\`\``);
             });
         }
     },

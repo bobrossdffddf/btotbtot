@@ -3,6 +3,10 @@ const { Client, GatewayIntentBits, Collection } = require('discord.js');
 const { setGlobalDispatcher, Agent } = require('undici');
 const fs = require('fs');
 const path = require('path');
+const dns = require('dns');
+
+// Fix for Node >= 20 DNS resolution issues on Windows (IPv6 timeout)
+dns.setDefaultResultOrder('ipv4first');
 
 // Fix for Node >= 20 UND_ERR_CONNECT_TIMEOUT issues in discord.js
 setGlobalDispatcher(new Agent({
