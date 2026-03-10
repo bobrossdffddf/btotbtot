@@ -7,16 +7,23 @@ module.exports = {
         .setDescription('View the current server player list with VC and Discord status.'),
 
     async execute(interaction, client) {
+        let deferred = false;
         try {
             await interaction.deferReply({ flags: 64 });
+            deferred = true;
         } catch (e) {
             console.error('Failed to defer reply:', e.message);
-            return;
+            // Continue without deferring
         }
 
         const inGamePlayers = await getPlayers();
         if (!inGamePlayers || !Array.isArray(inGamePlayers)) {
-            return interaction.editReply('Failed to fetch player list from the ERLC API.');
+            const errorMsg = 'Failed to fetch player list from the ERLC API.';
+            if (deferred) {
+                return interaction.editReply(errorMsg);
+            } else {
+                return interaction.reply({ content: errorMsg, flags: 64 });
+            }
         }
 
         const guild = interaction.guild;
@@ -86,6 +93,10 @@ module.exports = {
         summaryParts.push(`**Not in VC:** ${notInVCCount}  ${bLineStr ? bLineStr + ' ' : '\u2022 '}**Not in Discord:** ${notInDiscordCount}`);
         embed.addFields({ name: '\u200b', value: summaryParts.join('\n') });
 
-        await interaction.editReply({ embeds: [embed] });
+        if (deferred) {
+            await interaction.editReply({ embeds: [embed] });
+        } else {
+            await interaction.reply({ embeds: [embed], flags: 64 });
+        }
     },
 };

@@ -73,7 +73,7 @@ module.exports = {
             });
         } catch (e) {
             console.error('[SSU Vote] Error:', e.message);
-            await interaction.editReply('Failed to start vote.');
+            await interaction.followUp({ content: 'Failed to start vote.', flags: 64 });
         }
     },
 

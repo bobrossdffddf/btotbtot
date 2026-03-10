@@ -19,7 +19,13 @@ module.exports = {
             return interaction.reply({ content: 'The configured SSU channel could not be found.', flags: 64 });
         }
 
-        await interaction.deferReply({ flags: 64 });
+        let deferred = false;
+        try {
+            await interaction.deferReply({ flags: 64 });
+            deferred = true;
+        } catch (e) {
+            // Continue without deferring
+        }
 
         const embed = new EmbedBuilder()
             .setTitle('Server Shutdown')
@@ -34,15 +40,26 @@ module.exports = {
 
             // Run :shutdown command in ERLC
             const shutdownResult = await runCommand(':shutdown');
+            let msg;
             if (shutdownResult !== null) {
                 console.log('[SSD] :shutdown command sent to ERLC server.');
-                await interaction.editReply('SSD Announced successfully and `:shutdown` sent to the ERLC server.');
+                msg = 'SSD Announced successfully and `:shutdown` sent to the ERLC server.';
             } else {
-                await interaction.editReply('SSD Announced successfully, but failed to send `:shutdown` to ERLC. Check the API key.');
+                msg = 'SSD Announced successfully, but failed to send `:shutdown` to ERLC. Check the API key.';
+            }
+            if (deferred) {
+                await interaction.editReply(msg);
+            } else {
+                await interaction.reply({ content: msg, flags: 64 });
             }
         } catch (e) {
             console.error('[SSD] Error:', e.message);
-            await interaction.editReply('Failed to send SSD announcement. Check permissions.');
+            const msg = 'Failed to send SSD announcement. Check permissions.';
+            if (deferred) {
+                await interaction.editReply(msg);
+            } else {
+                await interaction.reply({ content: msg, flags: 64 });
+            }
         }
     },
 };

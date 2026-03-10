@@ -19,7 +19,13 @@ module.exports = {
             return interaction.reply({ content: 'The configured SSU channel could not be found.', flags: 64 });
         }
 
-        await interaction.deferReply({ flags: 64 });
+        let deferred = false;
+        try {
+            await interaction.deferReply({ flags: 64 });
+            deferred = true;
+        } catch (e) {
+            // Continue without deferring
+        }
 
         const serverInfo = await getServerInfo();
         let joinCodeInfo = '';
@@ -43,9 +49,18 @@ module.exports = {
         try {
             const pingRole = settings.pingRoleId ? `<@&${settings.pingRoleId}>` : '';
             await ssuChannel.send({ content: pingRole, embeds: [embed] });
-            await interaction.editReply('SSU Announced successfully.');
+            if (deferred) {
+                await interaction.editReply('SSU Announced successfully.');
+            } else {
+                await interaction.reply({ content: 'SSU Announced successfully.', flags: 64 });
+            }
         } catch (e) {
-            await interaction.editReply('Failed to send SSU announcement. Check permissions.');
+            const msg = 'Failed to send SSU announcement. Check permissions.';
+            if (deferred) {
+                await interaction.editReply(msg);
+            } else {
+                await interaction.reply({ content: msg, flags: 64 });
+            }
         }
     },
 };

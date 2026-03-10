@@ -17,14 +17,21 @@ module.exports = {
         // Ensure command starts with a colon if the user forgot it, though PRC uses colon for all commands. Let's let the user type whatever like `m Hello` or `:m Hello` just in case. They usually type it without the colon if it's like a discord input but let's assume they know how PRC commands work.
         const prcCmd = cmd.startsWith(':') ? cmd : `:${cmd}`;
 
-        await interaction.deferReply({ flags: 0 });
+        let deferred = false;
+        try {
+            await interaction.deferReply({ flags: 0 });
+            deferred = true;
+        } catch (e) {
+            // Continue without deferring
+        }
 
         const result = await runCommand(prcCmd);
 
-        if (result) {
-            await interaction.editReply(`Executed \`${prcCmd}\` in the server successfully.`);
+        const message = result ? `Executed \`${prcCmd}\` in the server successfully.` : `Failed to execute \`${prcCmd}\`. Please check the bot console or API key.`;
+        if (deferred) {
+            await interaction.editReply(message);
         } else {
-            await interaction.editReply(`Failed to execute \`${prcCmd}\`. Please check the bot console or API key.`);
+            await interaction.reply({ content: message, flags: 0 });
         }
     },
 };

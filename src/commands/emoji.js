@@ -33,10 +33,12 @@ module.exports = {
         }
         if (current) chunks.push(current);
 
+        let deferred = false;
         try {
             await interaction.deferReply({ flags: 64 });
+            deferred = true;
         } catch (e) {
-            // Interaction already replied/deferred, proceed with editing
+            // Interaction already replied/deferred, will use reply/followUp instead
         }
 
         for (let i = 0; i < chunks.length; i++) {
@@ -46,7 +48,11 @@ module.exports = {
                 .setColor('#5865F2');
 
             if (i === 0) {
-                await interaction.editReply({ embeds: [embed] });
+                if (deferred) {
+                    await interaction.editReply({ embeds: [embed] });
+                } else {
+                    await interaction.reply({ embeds: [embed], flags: 64 });
+                }
             } else {
                 await interaction.followUp({ embeds: [embed], flags: 64 });
             }
