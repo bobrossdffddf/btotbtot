@@ -59,4 +59,25 @@ for (const file of eventFiles) {
     }
 }
 
+// Global error handling for unhandled rejections and exceptions
+process.on('unhandledRejection', (reason, promise) => {
+    const timestamp = new Date().toISOString();
+    console.error(`[${timestamp}] [UNHANDLED_REJECTION] Promise: ${promise}\nReason: ${reason}`);
+});
+
+process.on('uncaughtException', (error) => {
+    const timestamp = new Date().toISOString();
+    console.error(`[${timestamp}] [UNCAUGHT_EXCEPTION] ${error.message}\n${error.stack}`);
+});
+
+client.on('error', (error) => {
+    const timestamp = new Date().toISOString();
+    console.error(`[${timestamp}] [CLIENT_ERROR] ${error.message}\n${error.stack}`);
+});
+
+client.on('warn', (warning) => {
+    const timestamp = new Date().toISOString();
+    console.warn(`[${timestamp}] [CLIENT_WARN] ${warning}`);
+});
+
 client.login(process.env.TOKEN);
