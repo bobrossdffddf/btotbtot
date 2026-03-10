@@ -8,20 +8,20 @@ module.exports = {
 
     async execute(interaction, client) {
         try {
+            // Always defer immediately (MUST be first)
+            await interaction.deferReply({ flags: 64 });
+
             const guildId = interaction.guild.id;
             const settings = client.settings.get(guildId);
 
             if (!settings || !settings.ssuChannelId) {
-                return interaction.reply({ content: 'Please configure the bot with `/setup` first.', flags: 64 });
+                return await interaction.editReply({ content: 'Please configure the bot with `/setup` first.' });
             }
 
             const ssuChannel = client.channels.cache.get(settings.ssuChannelId);
             if (!ssuChannel) {
-                return interaction.reply({ content: 'The configured SSU channel could not be found.', flags: 64 });
+                return await interaction.editReply({ content: 'The configured SSU channel could not be found.' });
             }
-
-            // Always defer immediately
-            await interaction.deferReply({ flags: 64 });
 
             const embed = new EmbedBuilder()
                 .setTitle('Server Shutdown')

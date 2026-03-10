@@ -7,15 +7,15 @@ module.exports = {
 
     async execute(interaction, client) {
         try {
+            // Always defer immediately (MUST be first)
+            await interaction.deferReply({ flags: 64 });
+
             const guild = interaction.guild;
             const emojis = guild.emojis.cache;
 
             if (emojis.size === 0) {
-                return await interaction.reply({ content: 'This server has no custom emojis.', flags: 64 });
+                return await interaction.editReply({ content: 'This server has no custom emojis.' });
             }
-
-            // Always defer immediately
-            await interaction.deferReply({ flags: 64 });
 
             // Split into chunks if there are too many emojis for one embed
             const emojiList = emojis.map(e => {
