@@ -67,13 +67,33 @@ async function getPlayers() {
 
 async function runCommand(command) {
     checkKey();
-    try {
-        const res = await erlcApi.post('/command', { command });
-        return res.data;
-    } catch (error) {
-        console.error('Error running ERLC command (' + command + '):', error.message);
-        return null;
+
+    const maxAttempts = 3;
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+        try {
+            const res = await erlcApi.post('/command', { command });
+            return res.data;
+        } catch (error) {
+            const status = error.response?.status;
+            const isRateLimited = status === 429;
+
+            if (isRateLimited && attempt < maxAttempts) {
+                const retryAfterHeader = Number(error.response?.headers?.['retry-after']);
+                const retryAfterMs = Number.isFinite(retryAfterHeader) && retryAfterHeader > 0
+                    ? retryAfterHeader * 1000
+                    : 1200 * attempt;
+
+                console.warn(`ERLC command rate-limited (${command}). Retrying in ${retryAfterMs}ms (attempt ${attempt}/${maxAttempts})`);
+                await new Promise(resolve => setTimeout(resolve, retryAfterMs));
+                continue;
+            }
+
+            console.error('Error running ERLC command (' + command + '):', error.message);
+            return null;
+        }
     }
+
+    return null;
 }
 
 async function pmPlayer(player, message) {
