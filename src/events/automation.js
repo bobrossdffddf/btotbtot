@@ -1,5 +1,5 @@
-const { Events } = require('discord.js');
-const { getPlayers, pmPlayer, jailPlayer, getPlayerName } = require('../api/erlc');
+const { Events, PermissionFlagsBits } = require('discord.js');
+const { getPlayers, pmPlayer, jailPlayer, getPlayerName, getPlayerId } = require('../api/erlc');
 
 // Track warning counts for players. Key: robloxUsername, Value: warning count
 const vcWarnings = new Map();
@@ -85,13 +85,22 @@ async function runChecks(client) {
         return;
     }
     const inGamePlayers = Array.isArray(inGamePlayersResponse) ? inGamePlayersResponse : [];
+    const hardcodeBypasses = client.settings.get(guild.id, 'hardcodeBypasses') || [];
 
     console.log(`[Checks] Active Players: ${inGamePlayers.length} | Guild Cache: ${guild.members.cache.size}`);
 
     // --- Role Management & VC Check ---
     for (const player of inGamePlayers) {
         const robloxUsername = getPlayerName(player.Player);
+        const robloxId = getPlayerId(player.Player);
         const member = findDiscordMember(guild, robloxUsername);
+
+        // --- Hardcode Bypass Check ---
+        if (hardcodeBypasses.includes(robloxUsername) || hardcodeBypasses.includes(robloxId)) {
+            vcWarnings.delete(robloxUsername);
+            commsWarnings.delete(robloxUsername);
+            continue;
+        }
 
         if (member) {
             // --- Give in-game role ---
@@ -105,7 +114,7 @@ async function runChecks(client) {
             }
 
             // --- Staff Bypass Check ---
-            if (member.roles.cache.has(STAFF_BYPASS_ROLE_ID)) {
+            if (member.roles.cache.has(STAFF_BYPASS_ROLE_ID) || member.permissions.has(PermissionFlagsBits.ManageMessages)) {
                 vcWarnings.delete(robloxUsername);
                 continue;
             }
