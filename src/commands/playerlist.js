@@ -4,8 +4,7 @@ const { getPlayers, getPlayerName, getPlayerId } = require('../api/erlc');
 module.exports = {
     data: new SlashCommandBuilder()
         .setName('playerlist')
-        .setDescription('Admin ONLY: View the current server player list with VC and Discord status.')
-        .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
+        .setDescription('View the current server player list with VC and Discord status.'),
 
     async execute(interaction, client) {
         try {

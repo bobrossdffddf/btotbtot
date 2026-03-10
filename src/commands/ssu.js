@@ -4,8 +4,7 @@ const { getServerInfo } = require('../api/erlc');
 module.exports = {
     data: new SlashCommandBuilder()
         .setName('ssu')
-        .setDescription('Admin ONLY: Announce a Server Start Up (SSU).')
-        .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
+        .setDescription('Announce a Server Start Up (SSU).'),
 
     async execute(interaction, client) {
         const guildId = interaction.guild.id;

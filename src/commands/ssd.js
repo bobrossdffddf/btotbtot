@@ -4,8 +4,7 @@ const { runCommand } = require('../api/erlc');
 module.exports = {
     data: new SlashCommandBuilder()
         .setName('ssd')
-        .setDescription('Admin ONLY: Announce a Server Shutdown (SSD).')
-        .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
+        .setDescription('Announce a Server Shutdown (SSD).'),
 
     async execute(interaction, client) {
         const guildId = interaction.guild.id;

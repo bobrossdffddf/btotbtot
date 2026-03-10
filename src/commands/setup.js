@@ -3,8 +3,7 @@ const { SlashCommandBuilder, PermissionFlagsBits } = require('discord.js');
 module.exports = {
     data: new SlashCommandBuilder()
         .setName('setup')
-        .setDescription('Admin ONLY: Sets up channels and roles for the bot.')
-        .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
+        .setDescription('Sets up channels and roles for the bot.')
         .addChannelOption(option =>
             option.setName('ssu_channel')
                 .setDescription('The channel where SSU/SSD announcements will go.')

@@ -7,8 +7,7 @@ module.exports = {
         .addStringOption(option =>
             option.setName('identifier')
                 .setDescription('Roblox username or ID')
-                .setRequired(true))
-        .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild),
+                .setRequired(true)),
 
     async execute(interaction, client) {
         const identifier = interaction.options.getString('identifier');

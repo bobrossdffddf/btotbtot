@@ -19,8 +19,7 @@ function buildProgressBar(current, total, guild) {
 module.exports = {
     data: new SlashCommandBuilder()
         .setName('ssu_vote')
-        .setDescription('Admin ONLY: Start a vote for an SSU.')
-        .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
+        .setDescription('Start a vote for an SSU.')
         .addIntegerOption(option =>
             option.setName('votes_needed')
                 .setDescription('Number of votes required to pass (default 5).')

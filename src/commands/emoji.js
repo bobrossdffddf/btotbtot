@@ -1,10 +1,9 @@
-const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder } = require('discord.js');
+const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
 
 module.exports = {
     data: new SlashCommandBuilder()
         .setName('emoji')
-        .setDescription('Admin ONLY: Lists all server emojis with their bot format IDs.')
-        .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
+        .setDescription('Lists all server emojis with their bot format IDs.'),
 
     async execute(interaction, client) {
         const guild = interaction.guild;
@@ -34,7 +33,11 @@ module.exports = {
         }
         if (current) chunks.push(current);
 
-        await interaction.deferReply({ flags: 64 });
+        try {
+            await interaction.deferReply({ flags: 64 });
+        } catch (e) {
+            // Interaction already replied/deferred, proceed with editing
+        }
 
         for (let i = 0; i < chunks.length; i++) {
             const embed = new EmbedBuilder()

@@ -1,23 +1,16 @@
-const { SlashCommandBuilder, PermissionFlagsBits } = require('discord.js');
+const { SlashCommandBuilder } = require('discord.js');
 const { runCommand } = require('../api/erlc');
-
-const REQUIRED_ROLE_ID = '970917178142498824';
 
 module.exports = {
     data: new SlashCommandBuilder()
         .setName('erlc')
         .setDescription('Execute an in-game ERLC command.')
-        .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
         .addStringOption(option =>
             option.setName('command')
                 .setDescription('The command to run (e.g. m Hello Server!)')
                 .setRequired(true)),
 
     async execute(interaction, client) {
-        // Check role and admin
-        if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator) || !interaction.member.roles.cache.has(REQUIRED_ROLE_ID)) {
-            return interaction.reply({ content: 'You must be an Administrator and have the required role to use this command.', flags: 64 });
-        }
 
         const cmd = interaction.options.getString('command');
 
