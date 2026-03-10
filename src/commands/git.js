@@ -1,4 +1,4 @@
-const { SlashCommandBuilder } = require('discord.js');
+const { SlashCommandBuilder, PermissionFlagsBits } = require('discord.js');
 const { exec } = require('child_process');
 const fs = require('fs');
 const path = require('path');
@@ -9,6 +9,7 @@ module.exports = {
     data: new SlashCommandBuilder()
         .setName('git')
         .setDescription('Git management commands (Owner only)')
+        .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
         .addSubcommand(subcommand =>
             subcommand.setName('restart')
                 .setDescription('Pull latest changes and restart PM2'))
@@ -21,7 +22,7 @@ module.exports = {
 
     async execute(interaction, client) {
         if (interaction.user.id !== OWNER_ID) {
-            return interaction.reply({ content: 'You do not have permission to use this command.', flags: 64 });
+            return interaction.reply({ content: 'You do not have permission to use this command. This is restricted to the specific owner ID.', flags: 64 });
         }
 
         const subcommand = interaction.options.getSubcommand();
