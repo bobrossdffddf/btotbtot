@@ -7,96 +7,94 @@ module.exports = {
         .setDescription('View the current server player list with VC and Discord status.'),
 
     async execute(interaction, client) {
-        let deferred = false;
         try {
+            // Always defer immediately
             await interaction.deferReply({ flags: 64 });
-            deferred = true;
-        } catch (e) {
-            console.error('Failed to defer reply:', e.message);
-            // Continue without deferring
-        }
 
-        const inGamePlayers = await getPlayers();
-        if (!inGamePlayers || !Array.isArray(inGamePlayers)) {
-            const errorMsg = 'Failed to fetch player list from the ERLC API.';
-            if (deferred) {
-                return interaction.editReply(errorMsg);
-            } else {
-                return interaction.reply({ content: errorMsg, flags: 64 });
+            const inGamePlayers = await getPlayers();
+            if (!inGamePlayers || !Array.isArray(inGamePlayers)) {
+                return await interaction.editReply({ content: 'Failed to fetch player list from the ERLC API.' });
             }
-        }
 
-        const guild = interaction.guild;
-        const staffCount = inGamePlayers.filter(p => p.Permission !== 'Normal').length;
+            const guild = interaction.guild;
+            const staffCount = inGamePlayers.filter(p => p.Permission !== 'Normal').length;
 
-        // Grab custom emojis from the server by name
-        const emojiStaff = guild.emojis.cache.find(e => e.name === 'Staff');
-        const emojiDiscord = guild.emojis.cache.find(e => e.name === 'Discord');
-        const emojiMic = guild.emojis.cache.find(e => e.name === 'mic');
-        const emojiBLine = guild.emojis.cache.find(e => e.name === 'BLine');
+            // Grab custom emojis from the server by name
+            const emojiStaff = guild.emojis.cache.find(e => e.name === 'Staff');
+            const emojiDiscord = guild.emojis.cache.find(e => e.name === 'Discord');
+            const emojiMic = guild.emojis.cache.find(e => e.name === 'mic');
+            const emojiBLine = guild.emojis.cache.find(e => e.name === 'BLine');
 
-        const staffStr = emojiStaff ? `${emojiStaff}` : '🛡️';
-        const discordStr = emojiDiscord ? `${emojiDiscord}` : '💬';
-        const micStr = emojiMic ? `${emojiMic}` : '🎙️';
-        const bLineStr = emojiBLine ? `${emojiBLine}` : '';
+            const staffStr = emojiStaff ? `${emojiStaff}` : '🛡️';
+            const discordStr = emojiDiscord ? `${emojiDiscord}` : '💬';
+            const micStr = emojiMic ? `${emojiMic}` : '🎙️';
+            const bLineStr = emojiBLine ? `${emojiBLine}` : '';
 
-        let lines = [];
-        let notInVCCount = 0;
-        let notInDiscordCount = 0;
+            let lines = [];
+            let notInVCCount = 0;
+            let notInDiscordCount = 0;
 
-        for (const player of inGamePlayers) {
-            const username = getPlayerName(player.Player);
-            const robloxId = getPlayerId(player.Player);
-            const team = player.Team || 'Civilian';
-            const callsign = player.Callsign ? ` ${player.Callsign}` : '';
-            const isStaff = player.Permission !== 'Normal';
+            for (const player of inGamePlayers) {
+                const username = getPlayerName(player.Player);
+                const robloxId = getPlayerId(player.Player);
+                const team = player.Team || 'Civilian';
+                const callsign = player.Callsign ? ` ${player.Callsign}` : '';
+                const isStaff = player.Permission !== 'Normal';
 
-            // Check Discord presence
-            const normalized = username.toLowerCase();
-            const member = guild.members.cache.find(m => {
-                const nick = (m.nickname || '').toLowerCase();
-                const globalName = (m.user.globalName || '').toLowerCase();
-                const uname = (m.user.username || '').toLowerCase();
-                return nick.includes(normalized) || globalName.includes(normalized) || uname.includes(normalized);
-            });
+                // Check Discord presence
+                const normalized = username.toLowerCase();
+                const member = guild.members.cache.find(m => {
+                    const nick = (m.nickname || '').toLowerCase();
+                    const globalName = (m.user.globalName || '').toLowerCase();
+                    const uname = (m.user.username || '').toLowerCase();
+                    return nick.includes(normalized) || globalName.includes(normalized) || uname.includes(normalized);
+                });
 
-            // Build status icons
-            let icons = '';
-            if (!member) {
-                notInDiscordCount++;
-                // No icons if they're not in Discord
-            } else {
-                if (member.voice.channelId) {
-                    icons = micStr;
+                // Build status icons
+                let icons = '';
+                if (!member) {
+                    notInDiscordCount++;
+                    // No icons if they're not in Discord
                 } else {
-                    notInVCCount++;
-                    icons = discordStr;
+                    if (member.voice.channelId) {
+                        icons = micStr;
+                    } else {
+                        notInVCCount++;
+                        icons = discordStr;
+                    }
                 }
+
+                const staffBadge = isStaff ? ` ${staffStr}` : '';
+                const line = `\u2022 ${icons ? icons + ' ' : ''}**${username}** ${robloxId} \u2022 ${team}${callsign}${staffBadge}`;
+                lines.push(line);
             }
 
-            const staffBadge = isStaff ? ` ${staffStr}` : '';
-            const line = `\u2022 ${icons ? icons + ' ' : ''}**${username}** ${robloxId} \u2022 ${team}${callsign}${staffBadge}`;
-            lines.push(line);
-        }
+            const embed = new EmbedBuilder()
+                .setAuthor({ name: 'Texas State Roleplay' })
+                .setTitle('Server Players')
+                .setColor('#2C2F33')
+                .setDescription(lines.join('\n') || 'No players currently in server.')
+                .setFooter({ text: `${inGamePlayers.length}/40 Players \u2022 ${staffCount} Staff` })
+                .setTimestamp();
 
-        const embed = new EmbedBuilder()
-            .setAuthor({ name: 'Texas State Roleplay' })
-            .setTitle('Server Players')
-            .setColor('#2C2F33')
-            .setDescription(lines.join('\n') || 'No players currently in server.')
-            .setFooter({ text: `${inGamePlayers.length}/40 Players \u2022 ${staffCount} Staff` })
-            .setTimestamp();
+            // Status summary at bottom
+            const summaryParts = [];
+            summaryParts.push(`${micStr} In VC  ${bLineStr ? bLineStr + ' ' : '\u2022 '}${discordStr} In Discord only`);
+            summaryParts.push(`**Not in VC:** ${notInVCCount}  ${bLineStr ? bLineStr + ' ' : '\u2022 '}**Not in Discord:** ${notInDiscordCount}`);
+            embed.addFields({ name: '\u200b', value: summaryParts.join('\n') });
 
-        // Status summary at bottom
-        const summaryParts = [];
-        summaryParts.push(`${micStr} In VC  ${bLineStr ? bLineStr + ' ' : '\u2022 '}${discordStr} In Discord only`);
-        summaryParts.push(`**Not in VC:** ${notInVCCount}  ${bLineStr ? bLineStr + ' ' : '\u2022 '}**Not in Discord:** ${notInDiscordCount}`);
-        embed.addFields({ name: '\u200b', value: summaryParts.join('\n') });
-
-        if (deferred) {
             await interaction.editReply({ embeds: [embed] });
-        } else {
-            await interaction.reply({ embeds: [embed], flags: 64 });
+        } catch (error) {
+            console.error('Playerlist command error:', error.message);
+            try {
+                if (!interaction.replied && !interaction.deferred) {
+                    await interaction.reply({ content: 'There was an error executing this command.', flags: 64 });
+                } else if (interaction.deferred) {
+                    await interaction.editReply({ content: 'There was an error executing this command.' });
+                }
+            } catch (e) {
+                console.error('Failed to send error reply:', e.message);
+            }
         }
     },
 };
