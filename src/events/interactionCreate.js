@@ -58,13 +58,9 @@ module.exports = {
                     } else {
                         // All other commands require the role OR admin permissions
                         const hasRequiredRole = interaction.member && interaction.member.roles.cache.has(REQUIRED_ROLE_ID);
-                        const hasAdminPerms = interaction.member && (
-                            interaction.member.permissions.has(PermissionFlagsBits.Administrator) ||
-                            interaction.member.permissions.has(PermissionFlagsBits.ManageMessages) ||
-                            interaction.member.permissions.has(PermissionFlagsBits.ManageGuild)
-                        );
+                        const isAdmin = interaction.member && interaction.member.permissions.has(PermissionFlagsBits.Administrator);
 
-                        if (!hasRequiredRole && !hasAdminPerms) {
+                        if (!hasRequiredRole && !isAdmin) {
                             log('WARN', interaction.commandName, `Permission denied for ${user.tag} (${user.id}) - missing required role or admin permissions`);
                             return await sendSafeReply(interaction, `You need the required role or admin permissions to use this command. Required role: <@&${REQUIRED_ROLE_ID}>`);
                         }
