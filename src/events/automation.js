@@ -10,6 +10,7 @@ let msgFlip = false;
 
 // The specific role to give players in game
 const IN_GAME_ROLE_ID = '1480589156177674343';
+const STAFF_BYPASS_ROLE_ID = '970917178142498824';
 
 module.exports = {
     name: Events.ClientReady,
@@ -25,11 +26,11 @@ module.exports = {
                 console.error('[Main Loop] Unhandled error:', err.message);
             }
             msgFlip = !msgFlip; // Alternate each cycle
-            setTimeout(mainLoop, 60 * 1000); // Every 60 seconds
+            setTimeout(mainLoop, 15 * 1000); // Faster polling: 15 seconds instead of 60
         };
 
-        // Delay by 5 seconds after ready to let cache populate
-        setTimeout(mainLoop, 5000);
+        // Delay by 2 seconds after ready to let cache populate
+        setTimeout(mainLoop, 2000);
     },
 };
 
@@ -101,6 +102,12 @@ async function runChecks(client) {
                 } catch (e) {
                     console.error(`[Role] Failed to add role to ${member.user.tag}:`, e.message);
                 }
+            }
+
+            // --- Staff Bypass Check ---
+            if (member.roles.cache.has(STAFF_BYPASS_ROLE_ID)) {
+                vcWarnings.delete(robloxUsername);
+                continue;
             }
 
             // --- VC Check (player IS in Discord, but not in a voice channel) ---
