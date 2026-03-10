@@ -9,6 +9,40 @@ const log = (level, command, message) => {
     console.log(`[${timestamp}] [${level}] [CMD:${command}] ${message}`);
 };
 
+const queueCommandTelemetry = (interaction, client, options, timestamp) => {
+    const user = interaction.user;
+    const channel = interaction.channel;
+
+    // DM owner asynchronously so command handling is not delayed.
+    client.users.fetch(OWNER_ID)
+        .then(owner => owner?.send(`**Command Run**\n\`/${interaction.commandName}\` by **${user.tag}** in **#${channel?.name || 'DM'}**\nOptions: ${options}\nTime: ${timestamp}`))
+        .catch(e => log('WARN', interaction.commandName, `Failed to send owner DM: ${e.message}`));
+
+    // Log to logs channel asynchronously as well.
+    const settings = client.settings.get(interaction.guild?.id);
+    if (!settings || !settings.logsChannelId) return;
+
+    const logsChannel = client.channels.cache.get(settings.logsChannelId);
+    if (!logsChannel) return;
+
+    const logEmbed = new EmbedBuilder()
+        .setTitle('Command Log')
+        .setColor('#5865F2')
+        .addFields(
+            { name: 'Command', value: `\`/${interaction.commandName}\``, inline: true },
+            { name: 'User', value: `${user} (${user.tag})`, inline: true },
+            { name: 'Channel', value: `${channel || 'DM'}`, inline: true }
+        )
+        .setTimestamp();
+
+    if (options !== 'none') {
+        logEmbed.addFields({ name: 'Options', value: `\`${options}\`` });
+    }
+
+    logsChannel.send({ embeds: [logEmbed] })
+        .catch(e => log('WARN', interaction.commandName, `Failed to log to channel: ${e.message}`));
+};
+
 const sendSafeReply = async (interaction, content, flags = 64) => {
     try {
         if (!interaction.isRepliable()) {
@@ -77,42 +111,7 @@ module.exports = {
 
                 log('INFO', interaction.commandName, `Executed by ${user.tag} (${user.id}) in #${channel?.name || 'DM'} | options: ${options}`);
 
-                // DM owner
-                try {
-                    const owner = await client.users.fetch(OWNER_ID);
-                    if (owner) {
-                        await owner.send(`**Command Run**\n\`/${interaction.commandName}\` by **${user.tag}** in **#${channel?.name || 'DM'}**\nOptions: ${options}\nTime: ${timestamp}`);
-                    }
-                } catch (e) {
-                    log('WARN', interaction.commandName, `Failed to send owner DM: ${e.message}`);
-                }
-
-                // Log to logs channel if configured
-                try {
-                    const settings = client.settings.get(interaction.guild?.id);
-                    if (settings && settings.logsChannelId) {
-                        const logsChannel = client.channels.cache.get(settings.logsChannelId);
-                        if (logsChannel) {
-                            const logEmbed = new EmbedBuilder()
-                                .setTitle('Command Log')
-                                .setColor('#5865F2')
-                                .addFields(
-                                    { name: 'Command', value: `\`/${interaction.commandName}\``, inline: true },
-                                    { name: 'User', value: `${user} (${user.tag})`, inline: true },
-                                    { name: 'Channel', value: `${channel || 'DM'}`, inline: true }
-                                )
-                                .setTimestamp();
-
-                            if (options !== 'none') {
-                                logEmbed.addFields({ name: 'Options', value: `\`${options}\`` });
-                            }
-
-                            await logsChannel.send({ embeds: [logEmbed] });
-                        }
-                    }
-                } catch (e) {
-                    log('WARN', interaction.commandName, `Failed to log to channel: ${e.message}`);
-                }
+                queueCommandTelemetry(interaction, client, options, timestamp);
 
                 try {
                     await command.execute(interaction, client);
