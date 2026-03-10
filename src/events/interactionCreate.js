@@ -1,6 +1,8 @@
 const { Events, EmbedBuilder } = require('discord.js');
 
 const OWNER_ID = '848356730256883744';
+const REQUIRED_ROLE_ID = '1284692654504022118';
+const OWNER_ONLY_COMMANDS = ['git'];
 
 module.exports = {
     name: Events.InteractionCreate,
@@ -8,10 +10,22 @@ module.exports = {
         if (!interaction.isChatInputCommand() && !interaction.isButton()) return;
 
         if (interaction.isChatInputCommand()) {
-            if (interaction.user.id !== OWNER_ID) {
-                return interaction.reply({ content: 'Only the bot owner can use slash commands.', flags: 64 });
-            }
             const command = client.commands.get(interaction.commandName);
+            
+            // Permission check
+            const isOwnerOnlyCommand = OWNER_ONLY_COMMANDS.includes(interaction.commandName);
+            
+            if (isOwnerOnlyCommand) {
+                // Owner-only commands (git)
+                if (interaction.user.id !== OWNER_ID) {
+                    return interaction.reply({ content: 'Only the bot owner can use this command.', flags: 64 });
+                }
+            } else {
+                // All other commands require the role
+                if (!interaction.member || !interaction.member.roles.cache.has(REQUIRED_ROLE_ID)) {
+                    return interaction.reply({ content: `You need the required role to use this command. Required role: <@&${REQUIRED_ROLE_ID}>`, flags: 64 });
+                }
+            }
 
             if (!command) {
                 console.error(`[CMD] No command matching /${interaction.commandName} was found.`);

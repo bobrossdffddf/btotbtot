@@ -8,7 +8,12 @@ module.exports = {
         .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
 
     async execute(interaction, client) {
-        await interaction.deferReply({ flags: 64 });
+        try {
+            await interaction.deferReply({ flags: 64 });
+        } catch (e) {
+            console.error('Failed to defer reply:', e.message);
+            return;
+        }
 
         const inGamePlayers = await getPlayers();
         if (!inGamePlayers || !Array.isArray(inGamePlayers)) {
