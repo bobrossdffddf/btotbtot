@@ -1,4 +1,4 @@
-const { Events, EmbedBuilder } = require('discord.js');
+const { Events, EmbedBuilder, PermissionFlagsBits } = require('discord.js');
 
 const OWNER_ID = '848356730256883744';
 const REQUIRED_ROLE_ID = '1284692654504022118';
@@ -56,10 +56,17 @@ module.exports = {
                             return await sendSafeReply(interaction, 'Only the bot owner can use this command.');
                         }
                     } else {
-                        // All other commands require the role
-                        if (!interaction.member || !interaction.member.roles.cache.has(REQUIRED_ROLE_ID)) {
-                            log('WARN', interaction.commandName, `Permission denied for ${user.tag} (${user.id}) - missing required role ${REQUIRED_ROLE_ID}`);
-                            return await sendSafeReply(interaction, `You need the required role to use this command. Required role: <@&${REQUIRED_ROLE_ID}>`);
+                        // All other commands require the role OR admin permissions
+                        const hasRequiredRole = interaction.member && interaction.member.roles.cache.has(REQUIRED_ROLE_ID);
+                        const hasAdminPerms = interaction.member && (
+                            interaction.member.permissions.has(PermissionFlagsBits.Administrator) ||
+                            interaction.member.permissions.has(PermissionFlagsBits.ManageMessages) ||
+                            interaction.member.permissions.has(PermissionFlagsBits.ManageGuild)
+                        );
+
+                        if (!hasRequiredRole && !hasAdminPerms) {
+                            log('WARN', interaction.commandName, `Permission denied for ${user.tag} (${user.id}) - missing required role or admin permissions`);
+                            return await sendSafeReply(interaction, `You need the required role or admin permissions to use this command. Required role: <@&${REQUIRED_ROLE_ID}>`);
                         }
                     }
                 } catch (permError) {
