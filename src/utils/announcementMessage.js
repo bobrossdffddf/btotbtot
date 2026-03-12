@@ -8,23 +8,31 @@ async function upsertAnnouncementMessage({
     announcementMessageId,
 }) {
     const settings = client.settings.get(guildId) || {};
-    const storedAnnouncementMessageId = announcementMessageId || settings.announcementMessageId;
-    let announcementMessage = null;
+    const storedId = announcementMessageId || settings.announcementMessageId;
 
-    if (storedAnnouncementMessageId) {
+    console.log(`[upsert] guildId=${guildId} storedId=${storedId}`);
+
+    let existingMessage = null;
+
+    if (storedId) {
         try {
-            announcementMessage = await channel.messages.fetch(storedAnnouncementMessageId);
+            existingMessage = await channel.messages.fetch(storedId);
+            console.log(`[upsert] Fetched existing message: ${storedId}`);
         } catch (error) {
-            announcementMessage = null;
+            console.log(`[upsert] Could not fetch message ${storedId}: ${error.message}`);
+            existingMessage = null;
         }
     }
 
-    if (announcementMessage) {
-        return announcementMessage.edit({ content, embeds, components });
+    if (existingMessage) {
+        console.log(`[upsert] Editing existing message ${existingMessage.id}`);
+        return existingMessage.edit({ content, embeds, components });
     }
 
+    console.log(`[upsert] Sending new message to channel ${channel.id}`);
     const sentMessage = await channel.send({ content, embeds, components });
     client.settings.set(guildId, { ...settings, announcementMessageId: sentMessage.id });
+    console.log(`[upsert] Stored new announcementMessageId: ${sentMessage.id}`);
     return sentMessage;
 }
 
