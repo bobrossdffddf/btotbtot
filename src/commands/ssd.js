@@ -39,6 +39,7 @@ module.exports = {
                 guildId,
                 channel: ssuChannel,
                 embeds: [embed],
+                components: [],
                 announcementMessageId,
             });
 

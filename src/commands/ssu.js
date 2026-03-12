@@ -52,6 +52,7 @@ module.exports = {
                 channel: ssuChannel,
                 content: pingRole,
                 embeds: [embed],
+                components: [],
                 announcementMessageId,
             });
             await interaction.editReply('SSU Announced successfully.');

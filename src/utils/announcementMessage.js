@@ -4,6 +4,7 @@ async function upsertAnnouncementMessage({
     channel,
     content = '',
     embeds = [],
+    components = [],
     announcementMessageId,
 }) {
     const settings = client.settings.get(guildId) || {};
@@ -19,10 +20,10 @@ async function upsertAnnouncementMessage({
     }
 
     if (announcementMessage) {
-        return announcementMessage.edit({ content, embeds });
+        return announcementMessage.edit({ content, embeds, components });
     }
 
-    const sentMessage = await channel.send({ content, embeds });
+    const sentMessage = await channel.send({ content, embeds, components });
     client.settings.set(guildId, { ...settings, announcementMessageId: sentMessage.id });
     return sentMessage;
 }

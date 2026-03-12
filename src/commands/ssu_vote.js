@@ -1,4 +1,5 @@
-const { SlashCommandBuilder, PermissionFlagsBits, ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder } = require('discord.js');
+const { SlashCommandBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder } = require('discord.js');
+const { upsertAnnouncementMessage } = require('../utils/announcementMessage');
 
 // Map to store active votes. Key: messageId, Value: { targetVotes, voters (Set), initiatorId }
 const activeVotes = new Map();
@@ -64,12 +65,22 @@ module.exports = {
 
         try {
             await interaction.reply({ content: 'Starting vote...', flags: 64 });
-            const message = await ssuChannel.send({ content: pingRole, embeds: [embed], components: [row] });
+
+            const announcementMessageId = settings.announcementMessageId;
+            const message = await upsertAnnouncementMessage({
+                client,
+                guildId,
+                channel: ssuChannel,
+                content: pingRole,
+                embeds: [embed],
+                components: [row],
+                announcementMessageId,
+            });
 
             activeVotes.set(message.id, {
-                targetVotes: targetVotes,
+                targetVotes,
                 voters: new Set(),
-                initiatorId: initiator.id
+                initiatorId: initiator.id,
             });
         } catch (e) {
             console.error('[SSU Vote] Error:', e.message);
@@ -78,5 +89,5 @@ module.exports = {
     },
 
     activeVotes,
-    buildProgressBar
+    buildProgressBar,
 };
