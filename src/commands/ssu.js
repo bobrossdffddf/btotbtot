@@ -1,5 +1,6 @@
-const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder } = require('discord.js');
+const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
 const { getServerInfo } = require('../api/erlc');
+const { upsertAnnouncementMessage } = require('../utils/announcementMessage');
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -23,6 +24,8 @@ module.exports = {
                 return await interaction.editReply({ content: 'The configured SSU channel could not be found.' });
             }
 
+            const announcementMessageId = settings.announcementMessageId;
+
             const serverInfo = await getServerInfo();
             let joinCodeInfo = '';
             let playerCount = 'N/A';
@@ -43,7 +46,14 @@ module.exports = {
                 .setTimestamp();
 
             const pingRole = settings.pingRoleId ? `<@&${settings.pingRoleId}>` : '';
-            await ssuChannel.send({ content: pingRole, embeds: [embed] });
+            await upsertAnnouncementMessage({
+                client,
+                guildId,
+                channel: ssuChannel,
+                content: pingRole,
+                embeds: [embed],
+                announcementMessageId,
+            });
             await interaction.editReply('SSU Announced successfully.');
         } catch (e) {
             console.error('[SSU] Error:', e.message);

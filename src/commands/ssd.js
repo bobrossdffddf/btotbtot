@@ -1,5 +1,6 @@
-const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder } = require('discord.js');
+const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
 const { runCommand } = require('../api/erlc');
+const { upsertAnnouncementMessage } = require('../utils/announcementMessage');
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -23,6 +24,8 @@ module.exports = {
                 return await interaction.editReply({ content: 'The configured SSU channel could not be found.' });
             }
 
+            const announcementMessageId = settings.announcementMessageId;
+
             const embed = new EmbedBuilder()
                 .setTitle('Server Shutdown')
                 .setColor('#2C2F33')
@@ -31,7 +34,13 @@ module.exports = {
                 .setFooter({ text: 'Texas State Roleplay' })
                 .setTimestamp();
 
-            await ssuChannel.send({ embeds: [embed] });
+            await upsertAnnouncementMessage({
+                client,
+                guildId,
+                channel: ssuChannel,
+                embeds: [embed],
+                announcementMessageId,
+            });
 
             // Run :shutdown command in ERLC
             const shutdownResult = await runCommand(':shutdown');
