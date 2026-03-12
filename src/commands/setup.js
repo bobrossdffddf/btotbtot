@@ -1,4 +1,4 @@
-const { SlashCommandBuilder, PermissionFlagsBits } = require('discord.js');
+const { SlashCommandBuilder } = require('discord.js');
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -24,9 +24,12 @@ module.exports = {
 
         const guildId = interaction.guild.id;
 
+        const existing = client.settings.get(guildId) || {};
+
         const settingsData = {
             ssuChannelId: ssuChannel.id,
-            pingRoleId: pingRole.id
+            pingRoleId: pingRole.id,
+            announcementMessageId: existing.announcementMessageId || null,
         };
 
         if (logsChannel) {
@@ -34,7 +37,6 @@ module.exports = {
         }
 
         // Preserve existing settings if only partially updating
-        const existing = client.settings.get(guildId) || {};
         client.settings.set(guildId, { ...existing, ...settingsData });
 
         let replyMsg = `Setup complete!\n**SSU Channel:** ${ssuChannel}\n**Ping Role:** ${pingRole}`;
