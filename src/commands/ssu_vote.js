@@ -27,44 +27,44 @@ module.exports = {
                 .setRequired(false)),
 
     async execute(interaction, client) {
-        const guildId = interaction.guild.id;
-        const settings = client.settings.get(guildId);
-
-        if (!settings || !settings.ssuChannelId) {
-            return interaction.reply({ content: 'Please configure the bot with `/setup` first.', flags: 64 });
-        }
-
-        const ssuChannel = client.channels.cache.get(settings.ssuChannelId);
-        if (!ssuChannel) {
-            return interaction.reply({ content: 'The configured SSU channel could not be found.', flags: 64 });
-        }
-
-        const targetVotes = interaction.options.getInteger('votes_needed') || 5;
-        const pingRole = settings.pingRoleId ? `<@&${settings.pingRoleId}>` : '@here';
-        const initiator = interaction.user;
-
-        const progressBar = buildProgressBar(0, targetVotes, interaction.guild);
-
-        const embed = new EmbedBuilder()
-            .setTitle('Session Poll')
-            .setDescription(`We have now initiated a session vote. Please react below if you're willing to attend today's session. We require **${targetVotes}** votes to start a session.\n\n${progressBar}`)
-            .setColor('#5865F2')
-            .setImage('https://i.postimg.cc/qvdpPzw1/Session-Vote-Banner.webp');
-
-        const voteBtn = new ButtonBuilder()
-            .setCustomId('vote_btn')
-            .setLabel(`Vote (0/${targetVotes})`)
-            .setStyle(ButtonStyle.Success);
-
-        const viewVotesBtn = new ButtonBuilder()
-            .setCustomId('view_votes_btn')
-            .setLabel('View Votes')
-            .setStyle(ButtonStyle.Primary);
-
-        const row = new ActionRowBuilder().addComponents(voteBtn, viewVotesBtn);
-
         try {
-            await interaction.reply({ content: 'Starting vote...', flags: 64 });
+            await interaction.deferReply({ flags: 64 });
+
+            const guildId = interaction.guild.id;
+            const settings = client.settings.get(guildId);
+
+            if (!settings || !settings.ssuChannelId) {
+                return await interaction.editReply({ content: 'Please configure the bot with `/setup` first.' });
+            }
+
+            const ssuChannel = client.channels.cache.get(settings.ssuChannelId);
+            if (!ssuChannel) {
+                return await interaction.editReply({ content: 'The configured SSU channel could not be found.' });
+            }
+
+            const targetVotes = interaction.options.getInteger('votes_needed') || 5;
+            const pingRole = settings.pingRoleId ? `<@&${settings.pingRoleId}>` : '@here';
+            const initiator = interaction.user;
+
+            const progressBar = buildProgressBar(0, targetVotes, interaction.guild);
+
+            const embed = new EmbedBuilder()
+                .setTitle('Session Poll')
+                .setDescription(`We have now initiated a session vote. Please react below if you're willing to attend today's session. We require **${targetVotes}** votes to start a session.\n\n${progressBar}`)
+                .setColor('#5865F2')
+                .setImage('https://i.postimg.cc/qvdpPzw1/Session-Vote-Banner.webp');
+
+            const voteBtn = new ButtonBuilder()
+                .setCustomId('vote_btn')
+                .setLabel(`Vote (0/${targetVotes})`)
+                .setStyle(ButtonStyle.Success);
+
+            const viewVotesBtn = new ButtonBuilder()
+                .setCustomId('view_votes_btn')
+                .setLabel('View Votes')
+                .setStyle(ButtonStyle.Primary);
+
+            const row = new ActionRowBuilder().addComponents(voteBtn, viewVotesBtn);
 
             const announcementMessageId = settings.announcementMessageId;
             const message = await upsertAnnouncementMessage({
@@ -82,9 +82,17 @@ module.exports = {
                 voters: new Set(),
                 initiatorId: initiator.id,
             });
+
+            await interaction.editReply({ content: 'Vote started successfully.' });
         } catch (e) {
             console.error('[SSU Vote] Error:', e.message);
-            await interaction.followUp({ content: 'Failed to start vote.', flags: 64 });
+            try {
+                if (interaction.deferred) {
+                    await interaction.editReply({ content: 'Failed to start vote. Check permissions.' });
+                }
+            } catch (replyError) {
+                console.error('Failed to send error reply:', replyError.message);
+            }
         }
     },
 
