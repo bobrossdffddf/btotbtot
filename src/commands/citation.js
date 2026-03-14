@@ -105,19 +105,18 @@ const generateCitationId = () => {
 // Returns { userId, index, citation } or null.
 const findCitationById = (client, citationId) => {
     const needle = citationId.trim().toUpperCase();
-    let result = null;
 
-    client.citations.forEach((citations, userId) => {
-        if (result) return;
-        if (!Array.isArray(citations)) return;
+    for (const userId of client.citations.keys()) {
+        const citations = client.citations.get(userId);
+        if (!Array.isArray(citations)) continue;
 
         const index = citations.findIndex(c => (c.citationId || '').toUpperCase() === needle);
         if (index !== -1) {
-            result = { userId, index, citation: citations[index] };
+            return { userId, index, citation: citations[index] };
         }
-    });
+    }
 
-    return result;
+    return null;
 };
 
 module.exports = {
