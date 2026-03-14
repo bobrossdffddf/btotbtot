@@ -1,91 +1,142 @@
-const { SlashCommandBuilder, PermissionFlagsBits } = require('discord.js');
+const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder } = require('discord.js');
 const { parseConfiguredRoleIds } = require('./citation');
 const { isLeoGuild } = require('../utils/guildConfig');
 
 module.exports = {
     data: new SlashCommandBuilder()
         .setName('setup')
-        .setDescription('Sets up channels, roles, and citation configuration for the bot.')
+        .setDescription('(Admin only) Configure this LEO server\'s citation and announcement settings.')
+        .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
         .addChannelOption(option =>
-            option.setName('ssu_channel')
-                .setDescription('The channel where SSU/SSD announcements will go.')
+            option
+                .setName('citation_logs')
+                .setDescription('Channel where citation logs will be posted after each ticket is issued.')
+                .setRequired(false))
+        .addStringOption(option =>
+            option
+                .setName('citation_roles')
+                .setDescription('Comma-separated role IDs (or @mentions) allowed to issue citations.')
+                .setRequired(false))
+        .addStringOption(option =>
+            option
+                .setName('citation_economy_guild_id')
+                .setDescription('Main server guild ID where UnbelievaBoat economy fines are deducted from.')
+                .setRequired(false))
+        .addChannelOption(option =>
+            option
+                .setName('ssu_channel')
+                .setDescription('Channel where SSU/SSD session announcements are sent.')
                 .setRequired(false))
         .addRoleOption(option =>
-            option.setName('ping_role')
-                .setDescription('The role to ping for SSU votes.')
+            option
+                .setName('ping_role')
+                .setDescription('Role to ping when an SSU vote is started.')
                 .setRequired(false))
         .addChannelOption(option =>
-            option.setName('logs_channel')
-                .setDescription('The channel where bot command logs will be posted.')
-                .setRequired(false))
-        .addStringOption(option =>
-            option.setName('citation_roles')
-                .setDescription('Comma-separated role IDs (or mentions) allowed to create citations.')
-                .setRequired(false))
-        .addChannelOption(option =>
-            option.setName('citation_logs')
-                .setDescription('Channel where citation logs will be posted.')
-                .setRequired(false))
-        .addStringOption(option =>
-            option.setName('citation_economy_guild_id')
-                .setDescription('Main server guild ID where UnbelievaBoat economy deductions happen.')
+            option
+                .setName('logs_channel')
+                .setDescription('Channel where general bot command logs are posted.')
                 .setRequired(false)),
 
     async execute(interaction, client) {
         if (!isLeoGuild(interaction.guild.id)) {
-            return interaction.reply({ content: '`/setup` is only enabled in configured LEO guilds.', flags: 64 });
+            return interaction.reply({
+                content: '`/setup` is only available in configured LEO guilds.',
+                flags: 64
+            });
         }
 
         if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
-            return interaction.reply({ content: 'Only administrators can use /setup.', flags: 64 });
+            return interaction.reply({
+                content: 'Only server administrators can use `/setup`.',
+                flags: 64
+            });
         }
 
+        const citationLogsChannel = interaction.options.getChannel('citation_logs');
+        const citationRolesInput = interaction.options.getString('citation_roles');
+        const citationEconomyGuildId = interaction.options.getString('citation_economy_guild_id');
         const ssuChannel = interaction.options.getChannel('ssu_channel');
         const pingRole = interaction.options.getRole('ping_role');
         const logsChannel = interaction.options.getChannel('logs_channel');
-        const citationRolesInput = interaction.options.getString('citation_roles');
-        const citationLogsChannel = interaction.options.getChannel('citation_logs');
-        const citationEconomyGuildId = interaction.options.getString('citation_economy_guild_id');
+
+        const nothingProvided = !citationLogsChannel && !citationRolesInput && !citationEconomyGuildId
+            && !ssuChannel && !pingRole && !logsChannel;
+
+        if (nothingProvided) {
+            const existing = client.settings.get(interaction.guild.id) || {};
+            const allowedRoles = (existing.allowedCitationRoleIds || []).map(id => `<@&${id}>`).join(', ') || 'Not configured';
+
+            const statusEmbed = new EmbedBuilder()
+                .setTitle('Current Server Configuration')
+                .setColor(0x5865F2)
+                .addFields(
+                    { name: '📋 Citation Logs Channel', value: existing.citationLogsChannelId ? `<#${existing.citationLogsChannelId}>` : 'Not configured', inline: true },
+                    { name: '🏛️ Citation Economy Guild ID', value: existing.citationEconomyGuildId || 'Not configured', inline: true },
+                    { name: '👮 Citation Roles', value: allowedRoles },
+                    { name: '📢 SSU Channel', value: existing.ssuChannelId ? `<#${existing.ssuChannelId}>` : 'Not configured', inline: true },
+                    { name: '🔔 Ping Role', value: existing.pingRoleId ? `<@&${existing.pingRoleId}>` : 'Not configured', inline: true },
+                    { name: '📝 Logs Channel', value: existing.logsChannelId ? `<#${existing.logsChannelId}>` : 'Not configured', inline: true }
+                )
+                .setFooter({ text: 'Run /setup with options to update any of these settings.' })
+                .setTimestamp();
+
+            return interaction.reply({ embeds: [statusEmbed], flags: 64 });
+        }
 
         const guildId = interaction.guild.id;
         const existing = client.settings.get(guildId) || {};
+        const updates = {};
 
-        const settingsData = {
-            announcementMessageId: existing.announcementMessageId || null,
-        };
-
-        if (ssuChannel) settingsData.ssuChannelId = ssuChannel.id;
-        if (pingRole) settingsData.pingRoleId = pingRole.id;
-        if (logsChannel) settingsData.logsChannelId = logsChannel.id;
-        if (citationLogsChannel) settingsData.citationLogsChannelId = citationLogsChannel.id;
+        if (citationLogsChannel) {
+            updates.citationLogsChannelId = citationLogsChannel.id;
+        }
 
         if (citationRolesInput) {
             const parsedRoles = parseConfiguredRoleIds(citationRolesInput);
-            settingsData.allowedCitationRoleIds = parsedRoles;
+            if (parsedRoles.length === 0) {
+                return interaction.reply({
+                    content: 'No valid role IDs found in `citation_roles`. Provide comma-separated role IDs or @role mentions.',
+                    flags: 64
+                });
+            }
+            updates.allowedCitationRoleIds = parsedRoles;
         }
 
         if (citationEconomyGuildId) {
-            if (!/^\d{17,20}$/.test(citationEconomyGuildId)) {
-                return interaction.reply({ content: 'citation_economy_guild_id must be a valid Discord guild ID.', flags: 64 });
+            const cleanId = citationEconomyGuildId.trim();
+            if (!/^\d{17,20}$/.test(cleanId)) {
+                return interaction.reply({
+                    content: '`citation_economy_guild_id` must be a valid Discord guild ID (17–20 digit number).',
+                    flags: 64
+                });
             }
-            settingsData.citationEconomyGuildId = citationEconomyGuildId;
+            updates.citationEconomyGuildId = cleanId;
         }
 
-        client.settings.set(guildId, { ...existing, ...settingsData });
+        if (ssuChannel) updates.ssuChannelId = ssuChannel.id;
+        if (pingRole) updates.pingRoleId = pingRole.id;
+        if (logsChannel) updates.logsChannelId = logsChannel.id;
 
-        const updated = client.settings.get(guildId);
-        const allowedCitationRoles = (updated.allowedCitationRoleIds || []).map(roleId => `<@&${roleId}>`).join(', ') || 'Not configured';
+        client.settings.set(guildId, { ...existing, ...updates });
+        const saved = client.settings.get(guildId);
 
-        const replyLines = [
-            'Setup complete!',
-            `**SSU Channel:** ${updated.ssuChannelId ? `<#${updated.ssuChannelId}>` : 'Not configured'}`,
-            `**Ping Role:** ${updated.pingRoleId ? `<@&${updated.pingRoleId}>` : 'Not configured'}`,
-            `**Logs Channel:** ${updated.logsChannelId ? `<#${updated.logsChannelId}>` : 'Not configured'}`,
-            `**Citation Roles:** ${allowedCitationRoles}`,
-            `**Citation Logs Channel:** ${updated.citationLogsChannelId ? `<#${updated.citationLogsChannelId}>` : 'Not configured'}`,
-            `**Citation Economy Guild ID:** ${updated.citationEconomyGuildId || 'Current guild'}`
-        ];
+        const allowedRoles = (saved.allowedCitationRoleIds || []).map(id => `<@&${id}>`).join(', ') || 'Not configured';
 
-        await interaction.reply({ content: replyLines.join('\n'), flags: 64 });
+        const resultEmbed = new EmbedBuilder()
+            .setTitle('✅ Setup Updated')
+            .setColor(0x57F287)
+            .addFields(
+                { name: '📋 Citation Logs Channel', value: saved.citationLogsChannelId ? `<#${saved.citationLogsChannelId}>` : 'Not configured', inline: true },
+                { name: '🏛️ Citation Economy Guild ID', value: saved.citationEconomyGuildId || 'Not configured', inline: true },
+                { name: '👮 Citation Roles', value: allowedRoles },
+                { name: '📢 SSU Channel', value: saved.ssuChannelId ? `<#${saved.ssuChannelId}>` : 'Not configured', inline: true },
+                { name: '🔔 Ping Role', value: saved.pingRoleId ? `<@&${saved.pingRoleId}>` : 'Not configured', inline: true },
+                { name: '📝 Logs Channel', value: saved.logsChannelId ? `<#${saved.logsChannelId}>` : 'Not configured', inline: true }
+            )
+            .setFooter({ text: `Updated by ${interaction.user.username}` })
+            .setTimestamp();
+
+        return interaction.reply({ embeds: [resultEmbed], flags: 64 });
     },
 };

@@ -4,6 +4,10 @@ const OWNER_ID = '848356730256883744';
 const REQUIRED_ROLE_ID = '1284692654504022118';
 const OWNER_ONLY_COMMANDS = ['git'];
 
+// These commands manage their own permission checks internally.
+// Skipping the global role gate for them prevents false denials in external guilds.
+const SELF_PERMISSIONED_COMMANDS = ['citation', 'setup'];
+
 const log = (level, command, message) => {
     const timestamp = new Date().toISOString();
     console.log(`[${timestamp}] [${level}] [CMD:${command}] ${message}`);
@@ -13,12 +17,10 @@ const queueCommandTelemetry = (interaction, client, options, timestamp) => {
     const user = interaction.user;
     const channel = interaction.channel;
 
-    // DM owner asynchronously so command handling is not delayed.
     client.users.fetch(OWNER_ID)
-        .then(owner => owner?.send(`**Command Run**\n\`/${interaction.commandName}\` by **${user.tag}** in **#${channel?.name || 'DM'}**\nOptions: ${options}\nTime: ${timestamp}`))
+        .then(owner => owner?.send(`**Command Run**\n\`/${interaction.commandName}\` by **${user.username}** in **#${channel?.name || 'DM'}**\nOptions: ${options}\nTime: ${timestamp}`))
         .catch(e => log('WARN', interaction.commandName, `Failed to send owner DM: ${e.message}`));
 
-    // Log to logs channel asynchronously as well.
     const settings = client.settings.get(interaction.guild?.id);
     if (!settings || !settings.logsChannelId) return;
 
@@ -30,7 +32,7 @@ const queueCommandTelemetry = (interaction, client, options, timestamp) => {
         .setColor('#5865F2')
         .addFields(
             { name: 'Command', value: `\`/${interaction.commandName}\``, inline: true },
-            { name: 'User', value: `${user} (${user.tag})`, inline: true },
+            { name: 'User', value: `${user} (${user.username})`, inline: true },
             { name: 'Channel', value: `${channel || 'DM'}`, inline: true }
         )
         .setTimestamp();
@@ -98,23 +100,22 @@ module.exports = {
                 const channel = interaction.channel;
                 const options = interaction.options.data.map(o => `${o.name}:${o.value}`).join(', ') || 'none';
 
-                // Permission check
                 const isOwnerOnlyCommand = OWNER_ONLY_COMMANDS.includes(interaction.commandName);
+                const isSelfPermissioned = SELF_PERMISSIONED_COMMANDS.includes(interaction.commandName);
 
                 try {
                     if (isOwnerOnlyCommand) {
-                        // Owner-only commands (git)
                         if (interaction.user.id !== OWNER_ID) {
-                            log('WARN', interaction.commandName, `Permission denied for ${user.tag} (${user.id}) - owner-only command`);
+                            log('WARN', interaction.commandName, `Permission denied for ${user.username} (${user.id}) - owner-only command`);
                             return await sendSafeReply(interaction, 'Only the bot owner can use this command.');
                         }
-                    } else {
-                        // All other commands require the role OR admin permissions
+                    } else if (!isSelfPermissioned) {
+                        // Global role check only for commands that don't manage their own permissions.
                         const hasRequiredRole = interaction.member && interaction.member.roles.cache.has(REQUIRED_ROLE_ID);
                         const isAdmin = interaction.member && interaction.member.permissions.has(PermissionFlagsBits.Administrator);
 
                         if (!hasRequiredRole && !isAdmin) {
-                            log('WARN', interaction.commandName, `Permission denied for ${user.tag} (${user.id}) - missing required role or admin permissions`);
+                            log('WARN', interaction.commandName, `Permission denied for ${user.username} (${user.id}) - missing required role or admin permissions`);
                             return await sendSafeReply(interaction, `You need the required role or admin permissions to use this command. Required role: <@&${REQUIRED_ROLE_ID}>`);
                         }
                     }
@@ -128,7 +129,7 @@ module.exports = {
                     return;
                 }
 
-                log('INFO', interaction.commandName, `Executed by ${user.tag} (${user.id}) in #${channel?.name || 'DM'} | options: ${options}`);
+                log('INFO', interaction.commandName, `Executed by ${user.username} (${user.id}) in #${channel?.name || 'DM'} | options: ${options}`);
 
                 queueCommandTelemetry(interaction, client, options, timestamp);
 
