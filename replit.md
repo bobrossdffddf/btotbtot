@@ -23,6 +23,10 @@ This is a Discord bot ("larp-bot") that provides slash commands and event handli
 - `TOKEN` - Discord bot token
 - `CLIENT_ID` - Discord application client ID
 - `ERLC_API_KEY` - ERLC (PRC) server API key
+- `UNBELIEVABOAT_API_KEY` - UnbelievaBoat API key used for citation economy deductions
+- `MAIN_GUILD_ID` - Main server guild ID (where `/citation lookup` is deployed)
+- `LEO_GUILD_IDS` - Comma-separated LEO guild IDs where `/setup` and `/citation create` are deployed
+- `LEO_GUILD_1`, `LEO_GUILD_2`, ... - Optional alternative to `LEO_GUILD_IDS` for per-guild variables
 
 ## Running
 
