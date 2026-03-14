@@ -8,7 +8,7 @@ const {
     PermissionFlagsBits
 } = require('discord.js');
 const { editUserBalance, getUserBalance } = require('../api/unbelievaboat');
-const { isLeoGuild, isMainGuild } = require('../utils/guildConfig');
+const { isLeoGuild } = require('../utils/guildConfig');
 
 const MAX_FINE_AMOUNT = 10_000_000;
 
@@ -165,13 +165,6 @@ module.exports = {
         }
 
         if (subcommand === 'lookup') {
-            if (!isMainGuild(interaction.guild.id)) {
-                return interaction.reply({
-                    content: '`/citation lookup` is only available in the configured main guild.',
-                    flags: 64
-                });
-            }
-
             const user = interaction.options.getUser('user', true);
             const allCitations = client.citations.get(user.id) || [];
 

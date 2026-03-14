@@ -14,33 +14,32 @@ if (fs.existsSync(commandsPath)) {
         if ('data' in command && 'execute' in command) {
             loadedCommands.push(command);
         } else {
-            console.log(`[WARNING] The command at ${file} is missing a required "data" or "execute" property.`);
+            console.log(`[WARNING] The command at ${file} is missing "data" or "execute".`);
         }
     }
 }
 
 const byName = new Map(loadedCommands.map(command => [command.data.name, command]));
-const commonCommands = loadedCommands
-    .filter(command => !['setup', 'citation'].includes(command.data.name))
-    .map(command => command.data.toJSON());
-
-const setupCommand = byName.get('setup');
 const citationCommand = byName.get('citation');
+const setupCommand = byName.get('setup');
 
+// LEO guilds: only /citation (create + lookup) and /setup (admin-only, hidden from regular members).
+// No ERLC, SSU, SSD, playerlist, or any other commands.
 const buildLeoCommands = () => {
-    const commands = [...commonCommands];
-
-    if (setupCommand) commands.push(setupCommand.data.toJSON());
+    const commands = [];
 
     if (citationCommand && typeof citationCommand.buildCitationData === 'function') {
-        commands.push(citationCommand.buildCitationData({ includeCreate: true, includeLookup: false }).toJSON());
+        commands.push(citationCommand.buildCitationData({ includeCreate: true, includeLookup: true }).toJSON());
     }
+
+    if (setupCommand) commands.push(setupCommand.data.toJSON());
 
     return commands;
 };
 
+// Main guild: only /citation lookup.
 const buildMainCommands = () => {
-    const commands = [...commonCommands];
+    const commands = [];
 
     if (citationCommand && typeof citationCommand.buildCitationData === 'function') {
         commands.push(citationCommand.buildCitationData({ includeCreate: false, includeLookup: true }).toJSON());
@@ -57,31 +56,31 @@ const rest = new REST().setToken(process.env.TOKEN);
         const mainGuildId = getMainGuildId();
 
         if (leoGuildIds.length === 0 && !mainGuildId) {
-            throw new Error('No guild targets configured. Set MAIN_GUILD_ID and/or LEO_GUILD_IDS (or LEO_GUILD_1, LEO_GUILD_2, ...).');
+            throw new Error('No guild targets configured. Set MAIN_GUILD_ID and/or LEO_GUILD_IDS.');
         }
 
         for (const leoGuildId of leoGuildIds) {
             const leoCommands = buildLeoCommands();
-            console.log(`Refreshing ${leoCommands.length} commands for LEO guild ${leoGuildId}...`);
+            console.log(`Deploying ${leoCommands.length} commands to LEO guild ${leoGuildId}: ${leoCommands.map(c => c.name).join(', ')}`);
 
             await rest.put(
                 Routes.applicationGuildCommands(process.env.CLIENT_ID, leoGuildId),
                 { body: leoCommands }
             );
 
-            console.log(`Successfully reloaded commands for LEO guild ${leoGuildId}.`);
+            console.log(`Done: LEO guild ${leoGuildId}`);
         }
 
         if (mainGuildId) {
             const mainCommands = buildMainCommands();
-            console.log(`Refreshing ${mainCommands.length} commands for main guild ${mainGuildId}...`);
+            console.log(`Deploying ${mainCommands.length} commands to main guild ${mainGuildId}: ${mainCommands.map(c => c.name).join(', ')}`);
 
             await rest.put(
                 Routes.applicationGuildCommands(process.env.CLIENT_ID, mainGuildId),
                 { body: mainCommands }
             );
 
-            console.log(`Successfully reloaded commands for main guild ${mainGuildId}.`);
+            console.log(`Done: main guild ${mainGuildId}`);
         }
 
         console.log('Guild-specific command deployment completed.');
