@@ -281,33 +281,62 @@ module.exports = {
                 currentBalance = await getUserBalance(economyGuildId, targetUserId);
             } catch (balanceError) {
                 const status = balanceError.response?.status;
+                const detail = balanceError.response?.data?.message || '';
                 if (status === 404) {
                     return interaction.editReply({
-                        content: `User <@${targetUserId}> was not found in the economy server (\`${economyGuildId}\`). They may not have an account yet.`
+                        content: `User <@${targetUserId}> was not found in the economy server (\`${economyGuildId}\`). They may not have a balance yet.`
                     });
                 }
-                if (status === 401 || status === 403) {
+                if (status === 403) {
                     return interaction.editReply({
-                        content: 'The UnbelievaBoat API key is invalid or lacks permissions for that server. Please contact the bot administrator.'
+                        content: `**UnbelievaBoat — Application Not Authorized**\n\nThe bot's API key is valid, but it has not been granted access to server \`${economyGuildId}\`.\n\nTo fix this:\n1. Go to <https://unbelievaboat.com/applications>\n2. Open your application and go to **Authorizations**\n3. Authorize it for the correct server\n\nIf you haven't created an application yet, do so there and use that API key.`
+                    });
+                }
+                if (status === 401) {
+                    return interaction.editReply({
+                        content: 'The UnbelievaBoat API key is invalid. Update `UNBELIEVABOAT_API_KEY` in the bot secrets.'
                     });
                 }
                 throw balanceError;
             }
 
-            const availableCash = Number(currentBalance.cash || 0);
+            const availableCash = Math.max(0, Number(currentBalance.cash || 0));
+            const availableBank = Math.max(0, Number(currentBalance.bank || 0));
 
-            if (availableCash < fineAmount) {
-                return interaction.editReply({
-                    content: `Cannot issue citation: <@${targetUserId}> only has ${formatFine(availableCash)} in cash, but the fine is ${formatFine(fineAmount)}. Reduce the fine or handle this manually.`
-                });
+            // Deduct from cash first, then bank for the remainder.
+            // If combined balance is still not enough, let the deduction go negative.
+            let cashDeduction = 0;
+            let bankDeduction = 0;
+
+            if (availableCash >= fineAmount) {
+                // Cash covers the full fine
+                cashDeduction = -fineAmount;
+            } else {
+                // Use all available cash, then take remainder from bank
+                cashDeduction = -availableCash;
+                const remainder = fineAmount - availableCash;
+                bankDeduction = -remainder; // May go negative if bank can't cover it either
             }
+
+            const deductionPayload = {};
+            if (cashDeduction !== 0) deductionPayload.cash = cashDeduction;
+            if (bankDeduction !== 0) deductionPayload.bank = bankDeduction;
 
             const updatedBalance = await editUserBalance(
                 economyGuildId,
                 targetUserId,
-                { cash: -fineAmount },
+                deductionPayload,
                 reason
             );
+
+            const afterCash = Number(updatedBalance.cash ?? 0);
+            const afterBank = Number(updatedBalance.bank ?? 0);
+
+            // Build a human-readable breakdown of where the deduction came from
+            const deductionParts = [];
+            if (cashDeduction !== 0) deductionParts.push(`${formatFine(Math.abs(cashDeduction))} from cash`);
+            if (bankDeduction !== 0) deductionParts.push(`${formatFine(Math.abs(bankDeduction))} from bank`);
+            const deductionBreakdown = deductionParts.join(' + ');
 
             const citation = {
                 citationId: generateCitationId(),
@@ -323,7 +352,9 @@ module.exports = {
                 personDescription,
                 fineAmount,
                 beforeCash: availableCash,
-                afterCash: Number(updatedBalance.cash ?? 0),
+                beforeBank: availableBank,
+                afterCash,
+                afterBank,
                 createdAt: new Date().toISOString()
             };
 
@@ -343,8 +374,10 @@ module.exports = {
                     { name: 'Vehicle Description', value: carDescription },
                     { name: 'Person Description', value: personDescription },
                     { name: 'Fine Amount', value: formatFine(fineAmount), inline: true },
-                    { name: 'Balance Before', value: formatFine(availableCash), inline: true },
-                    { name: 'Balance After', value: formatFine(citation.afterCash), inline: true }
+                    { name: 'Deducted From', value: deductionBreakdown, inline: true },
+                    { name: '\u200b', value: '\u200b', inline: true },
+                    { name: 'Cash Before → After', value: `${formatFine(availableCash)} → ${formatFine(afterCash)}`, inline: true },
+                    { name: 'Bank Before → After', value: `${formatFine(availableBank)} → ${formatFine(afterBank)}`, inline: true }
                 )
                 .setFooter({ text: `Issued in ${interaction.guild.name} • Economy server: ${economyGuildId}` })
                 .setTimestamp();
@@ -360,7 +393,7 @@ module.exports = {
             }
 
             return interaction.editReply({
-                content: `Citation **${citation.citationId}** successfully issued for <@${targetUserId}>. ${formatFine(fineAmount)} has been deducted from their cash balance.`,
+                content: `Citation **${citation.citationId}** issued for <@${targetUserId}>. ${formatFine(fineAmount)} deducted (${deductionBreakdown}).`,
                 embeds: [citationEmbed]
             });
 
@@ -370,8 +403,10 @@ module.exports = {
             console.error(`[CITATION] Failed to process citation: ${error.message}`, error.response?.data);
 
             let userMessage = 'Failed to process the citation. Please try again.';
-            if (status === 401 || status === 403) {
-                userMessage = 'The UnbelievaBoat API key is invalid or missing permissions. Contact the bot administrator.';
+            if (status === 403) {
+                userMessage = `**UnbelievaBoat — Application Not Authorized**\n\nThe API key is valid but the application hasn't been authorized for server \`${economyGuildId}\`.\n\n1. Go to <https://unbelievaboat.com/applications>\n2. Open your application → **Authorizations**\n3. Authorize it for the correct server`;
+            } else if (status === 401) {
+                userMessage = 'The UnbelievaBoat API key is invalid. Update `UNBELIEVABOAT_API_KEY` in the bot secrets.';
             } else if (status === 404) {
                 userMessage = `User <@${targetUserId}> was not found in the economy server (\`${economyGuildId}\`).`;
             } else if (status >= 500) {
