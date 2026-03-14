@@ -284,21 +284,53 @@ module.exports = {
             }
 
             const { userId, index, citation } = found;
+
+            // Remove from the database first
             const citations = client.citations.get(userId);
             citations.splice(index, 1);
             client.citations.set(userId, citations);
 
+            // Attempt to refund the fine to cash via UnbelievaBoat
+            await interaction.deferReply({ flags: 64 });
+
+            let refundSuccess = false;
+            let newCashBalance = null;
+            const economyGuildId = citation.economyGuildId;
+            const refundReason = `Citation ${citation.citationId} removed by ${interaction.user.username} — fine refunded`;
+
+            if (economyGuildId) {
+                try {
+                    const updated = await editUserBalance(
+                        economyGuildId,
+                        citation.targetUserId,
+                        { cash: citation.fineAmount },
+                        refundReason
+                    );
+                    refundSuccess = true;
+                    newCashBalance = Number(updated.cash ?? 0);
+                } catch (refundError) {
+                    console.error(`[CITATION] Refund failed for ${citation.citationId}: ${refundError.message}`, refundError.response?.data);
+                }
+            }
+
+            const issuedDate = new Date(citation.createdAt).toLocaleString('en-US', {
+                dateStyle: 'medium',
+                timeStyle: 'short'
+            });
+
             const embed = new EmbedBuilder()
                 .setColor(0x57F287)
-                .setTitle('🗑️ Citation Removed')
+                .setTitle('🗑️ Citation Removed & Fine Refunded')
                 .addFields(
                     { name: 'Citation ID', value: citation.citationId, inline: true },
                     { name: 'Target', value: `<@${citation.targetUserId}>`, inline: true },
+                    { name: 'Removed By', value: `<@${interaction.user.id}>`, inline: true },
+                    { name: 'Violation', value: citation.violationName },
+                    { name: 'Fine Refunded', value: formatFine(citation.fineAmount), inline: true },
+                    { name: 'Refund Status', value: refundSuccess ? `✅ ${formatFine(citation.fineAmount)} returned to cash` : '⚠️ Refund failed — manual adjustment may be needed', inline: true },
+                    { name: newCashBalance !== null ? 'New Cash Balance' : '\u200b', value: newCashBalance !== null ? formatFine(newCashBalance) : '\u200b', inline: true },
                     { name: 'Originally Issued By', value: `<@${citation.issuedBy}>`, inline: true },
-                    { name: 'Violation', value: citation.violationName, inline: false },
-                    { name: 'Original Fine', value: formatFine(citation.fineAmount), inline: true },
-                    { name: 'Originally Issued', value: new Date(citation.createdAt).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' }), inline: true },
-                    { name: 'Removed By', value: `<@${interaction.user.id}>`, inline: true }
+                    { name: 'Originally Issued', value: issuedDate, inline: true }
                 )
                 .setFooter({ text: `Remaining citations for user: ${citations.length}` })
                 .setTimestamp();
@@ -314,10 +346,13 @@ module.exports = {
                 }
             }
 
-            return interaction.reply({
-                content: `Citation \`${citation.citationId}\` has been removed from the record.`,
-                embeds: [embed],
-                flags: 64
+            const replyContent = refundSuccess
+                ? `Citation \`${citation.citationId}\` removed. ${formatFine(citation.fineAmount)} has been refunded to <@${citation.targetUserId}>'s cash balance.`
+                : `Citation \`${citation.citationId}\` removed from record, but the refund to UnbelievaBoat failed. Please adjust the balance manually.`;
+
+            return interaction.editReply({
+                content: replyContent,
+                embeds: [embed]
             });
         }
     },
