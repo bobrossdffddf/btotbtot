@@ -28,6 +28,7 @@ const client = new Client({
 
 client.commands = new Collection();
 client.settings = new Enmap({ name: 'settings' }); // Store server settings like channel IDs
+client.citations = new Enmap({ name: 'citations' }); // Store citation history keyed by target user ID
 
 // Load Commands
 const commandsPath = path.join(__dirname, 'src', 'commands');

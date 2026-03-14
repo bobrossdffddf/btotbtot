@@ -70,7 +70,26 @@ module.exports = {
     name: Events.InteractionCreate,
     async execute(interaction, client) {
         try {
-            if (!interaction.isChatInputCommand() && !interaction.isButton()) return;
+            if (!interaction.isChatInputCommand() && !interaction.isButton() && !interaction.isModalSubmit()) return;
+
+            if (interaction.isModalSubmit()) {
+                if (interaction.customId.startsWith('citation-create:')) {
+                    const citationCommand = client.commands.get('citation');
+                    if (!citationCommand || typeof citationCommand.handleModalSubmit !== 'function') {
+                        log('ERROR', 'citation', 'Citation command modal handler is not available');
+                        return await sendSafeReply(interaction, 'Citation modal handler is unavailable right now.');
+                    }
+
+                    try {
+                        await citationCommand.handleModalSubmit(interaction, client);
+                    } catch (error) {
+                        log('ERROR', 'citation', `Modal execution failed: ${error.message}\n${error.stack}`);
+                        await sendSafeReply(interaction, 'There was an error while processing the citation form.');
+                    }
+                }
+
+                return;
+            }
 
             if (interaction.isChatInputCommand()) {
                 const command = client.commands.get(interaction.commandName);
