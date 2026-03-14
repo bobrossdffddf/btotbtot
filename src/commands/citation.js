@@ -12,10 +12,13 @@ const { isLeoGuild } = require('../utils/guildConfig');
 
 const MAX_FINE_AMOUNT = 10_000_000;
 
-const buildCitationData = ({ includeCreate = true, includeLookup = true } = {}) => {
+// Role ID that grants /erlc access in the main server — also grants /citation remove there.
+const MAIN_SERVER_REQUIRED_ROLE_ID = '1284692654504022118';
+
+const buildCitationData = ({ includeCreate = true, includeLookup = true, includeRemove = true } = {}) => {
     const builder = new SlashCommandBuilder()
         .setName('citation')
-        .setDescription('Create or lookup police citations tied to UnbelievaBoat economy.');
+        .setDescription('Create, lookup, or remove police citations tied to UnbelievaBoat economy.');
 
     if (includeCreate) {
         builder.addSubcommand(subcommand =>
@@ -41,6 +44,18 @@ const buildCitationData = ({ includeCreate = true, includeLookup = true } = {}) 
                         .setRequired(true)));
     }
 
+    if (includeRemove) {
+        builder.addSubcommand(subcommand =>
+            subcommand
+                .setName('remove')
+                .setDescription('Remove a citation from the record by its citation ID.')
+                .addStringOption(option =>
+                    option
+                        .setName('citation_id')
+                        .setDescription('The citation ID to remove (e.g. CIT-ABC123-XYZ).')
+                        .setRequired(true)));
+    }
+
     return builder;
 };
 
@@ -63,6 +78,21 @@ const hasCitationPermission = (interaction, settings) => {
     return allowedRoleIds.some(roleId => interaction.member.roles.cache.has(roleId));
 };
 
+const hasRemovePermission = (interaction, settings) => {
+    const isAdmin = interaction.member.permissions.has(PermissionFlagsBits.Administrator);
+    if (isAdmin) return true;
+
+    if (isLeoGuild(interaction.guild.id)) {
+        // In LEO servers: must have the configured citation remove role
+        const removeRoleIds = settings.allowedCitationRemoveRoleIds || [];
+        if (!Array.isArray(removeRoleIds) || removeRoleIds.length === 0) return false;
+        return removeRoleIds.some(roleId => interaction.member.roles.cache.has(roleId));
+    } else {
+        // In main server: anyone with the ERLC command role can remove citations
+        return interaction.member.roles.cache.has(MAIN_SERVER_REQUIRED_ROLE_ID);
+    }
+};
+
 const formatFine = (amount) => `$${Number(amount).toLocaleString('en-US')}`;
 
 const generateCitationId = () => {
@@ -71,8 +101,27 @@ const generateCitationId = () => {
     return `CIT-${ts}-${rand}`;
 };
 
+// Search all citation records for a specific citation ID.
+// Returns { userId, index, citation } or null.
+const findCitationById = (client, citationId) => {
+    const needle = citationId.trim().toUpperCase();
+    let result = null;
+
+    client.citations.forEach((citations, userId) => {
+        if (result) return;
+        if (!Array.isArray(citations)) return;
+
+        const index = citations.findIndex(c => (c.citationId || '').toUpperCase() === needle);
+        if (index !== -1) {
+            result = { userId, index, citation: citations[index] };
+        }
+    });
+
+    return result;
+};
+
 module.exports = {
-    data: buildCitationData({ includeCreate: true, includeLookup: true }),
+    data: buildCitationData({ includeCreate: true, includeLookup: true, includeRemove: true }),
 
     buildCitationData,
 
@@ -80,6 +129,7 @@ module.exports = {
         const subcommand = interaction.options.getSubcommand();
         const guildSettings = client.settings.get(interaction.guild.id) || {};
 
+        // ── CREATE ──────────────────────────────────────────────────────────────
         if (subcommand === 'create') {
             if (!isLeoGuild(interaction.guild.id)) {
                 return interaction.reply({
@@ -164,6 +214,7 @@ module.exports = {
             return interaction.showModal(modal);
         }
 
+        // ── LOOKUP ──────────────────────────────────────────────────────────────
         if (subcommand === 'lookup') {
             const user = interaction.options.getUser('user', true);
             const allCitations = client.citations.get(user.id) || [];
@@ -208,6 +259,67 @@ module.exports = {
                 .setTimestamp();
 
             return interaction.reply({ embeds: [embed], flags: 64 });
+        }
+
+        // ── REMOVE ──────────────────────────────────────────────────────────────
+        if (subcommand === 'remove') {
+            if (!hasRemovePermission(interaction, guildSettings)) {
+                const hint = isLeoGuild(interaction.guild.id)
+                    ? 'Contact an administrator to configure citation remove roles via `/setup`.'
+                    : `You need the <@&${MAIN_SERVER_REQUIRED_ROLE_ID}> role or administrator permissions.`;
+
+                return interaction.reply({
+                    content: `You do not have permission to remove citations. ${hint}`,
+                    flags: 64
+                });
+            }
+
+            const citationId = interaction.options.getString('citation_id', true).trim();
+            const found = findCitationById(client, citationId);
+
+            if (!found) {
+                return interaction.reply({
+                    content: `No citation found with ID \`${citationId}\`. Double-check the ID using \`/citation lookup\`.`,
+                    flags: 64
+                });
+            }
+
+            const { userId, index, citation } = found;
+            const citations = client.citations.get(userId);
+            citations.splice(index, 1);
+            client.citations.set(userId, citations);
+
+            const embed = new EmbedBuilder()
+                .setColor(0x57F287)
+                .setTitle('🗑️ Citation Removed')
+                .addFields(
+                    { name: 'Citation ID', value: citation.citationId, inline: true },
+                    { name: 'Target', value: `<@${citation.targetUserId}>`, inline: true },
+                    { name: 'Originally Issued By', value: `<@${citation.issuedBy}>`, inline: true },
+                    { name: 'Violation', value: citation.violationName, inline: false },
+                    { name: 'Original Fine', value: formatFine(citation.fineAmount), inline: true },
+                    { name: 'Originally Issued', value: new Date(citation.createdAt).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' }), inline: true },
+                    { name: 'Removed By', value: `<@${interaction.user.id}>`, inline: true }
+                )
+                .setFooter({ text: `Remaining citations for user: ${citations.length}` })
+                .setTimestamp();
+
+            // Log to citation logs channel if configured
+            const logsChannelId = guildSettings.citationLogsChannelId;
+            if (logsChannelId) {
+                const logsChannel = interaction.guild.channels.cache.get(logsChannelId);
+                if (logsChannel) {
+                    logsChannel.send({ embeds: [embed] }).catch(err => {
+                        console.error(`[CITATION] Failed to send remove log: ${err.message}`);
+                    });
+                }
+            }
+
+            return interaction.reply({
+                content: `Citation \`${citation.citationId}\` has been removed from the record.`,
+                embeds: [embed],
+                flags: 64
+            });
         }
     },
 
@@ -254,8 +366,6 @@ module.exports = {
             });
         }
 
-        // Default economy guild is the configured main guild for this LEO server.
-        // Admins can override per-server via /setup citation_economy_guild_id.
         const economyGuildId = guildSettings.citationEconomyGuildId;
         if (!economyGuildId) {
             return interaction.reply({
@@ -274,7 +384,6 @@ module.exports = {
                 currentBalance = await getUserBalance(economyGuildId, targetUserId);
             } catch (balanceError) {
                 const status = balanceError.response?.status;
-                const detail = balanceError.response?.data?.message || '';
                 if (status === 404) {
                     return interaction.editReply({
                         content: `User <@${targetUserId}> was not found in the economy server (\`${economyGuildId}\`). They may not have a balance yet.`
@@ -282,7 +391,7 @@ module.exports = {
                 }
                 if (status === 403) {
                     return interaction.editReply({
-                        content: `**UnbelievaBoat — Application Not Authorized**\n\nThe bot's API key is valid, but it has not been granted access to server \`${economyGuildId}\`.\n\nTo fix this:\n1. Go to <https://unbelievaboat.com/applications>\n2. Open your application and go to **Authorizations**\n3. Authorize it for the correct server\n\nIf you haven't created an application yet, do so there and use that API key.`
+                        content: `**UnbelievaBoat — Application Not Authorized**\n\nThe API key is valid but the application hasn't been authorized for server \`${economyGuildId}\`.\n\n1. Go to <https://unbelievaboat.com/applications>\n2. Open your application → **Authorizations**\n3. Authorize it for the correct server`
                     });
                 }
                 if (status === 401) {
@@ -297,18 +406,16 @@ module.exports = {
             const availableBank = Math.max(0, Number(currentBalance.bank || 0));
 
             // Deduct from cash first, then bank for the remainder.
-            // If combined balance is still not enough, let the deduction go negative.
+            // If neither covers the fine, the balance goes negative.
             let cashDeduction = 0;
             let bankDeduction = 0;
 
             if (availableCash >= fineAmount) {
-                // Cash covers the full fine
                 cashDeduction = -fineAmount;
             } else {
-                // Use all available cash, then take remainder from bank
                 cashDeduction = -availableCash;
                 const remainder = fineAmount - availableCash;
-                bankDeduction = -remainder; // May go negative if bank can't cover it either
+                bankDeduction = -remainder;
             }
 
             const deductionPayload = {};
@@ -325,7 +432,6 @@ module.exports = {
             const afterCash = Number(updatedBalance.cash ?? 0);
             const afterBank = Number(updatedBalance.bank ?? 0);
 
-            // Build a human-readable breakdown of where the deduction came from
             const deductionParts = [];
             if (cashDeduction !== 0) deductionParts.push(`${formatFine(Math.abs(cashDeduction))} from cash`);
             if (bankDeduction !== 0) deductionParts.push(`${formatFine(Math.abs(bankDeduction))} from bank`);

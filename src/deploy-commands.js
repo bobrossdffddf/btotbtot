@@ -23,13 +23,12 @@ const byName = new Map(loadedCommands.map(command => [command.data.name, command
 const citationCommand = byName.get('citation');
 const setupCommand = byName.get('setup');
 
-// LEO guilds: only /citation (create + lookup) and /setup (admin-only, hidden from regular members).
-// No ERLC, SSU, SSD, playerlist, or any other commands.
+// LEO guilds: /citation (create + lookup + remove) and /setup (admin-only).
 const buildLeoCommands = () => {
     const commands = [];
 
     if (citationCommand && typeof citationCommand.buildCitationData === 'function') {
-        commands.push(citationCommand.buildCitationData({ includeCreate: true, includeLookup: true }).toJSON());
+        commands.push(citationCommand.buildCitationData({ includeCreate: true, includeLookup: true, includeRemove: true }).toJSON());
     }
 
     if (setupCommand) commands.push(setupCommand.data.toJSON());
@@ -37,12 +36,12 @@ const buildLeoCommands = () => {
     return commands;
 };
 
-// Main guild: only /citation lookup.
+// Main guild: /citation (lookup + remove only — no create, no setup).
 const buildMainCommands = () => {
     const commands = [];
 
     if (citationCommand && typeof citationCommand.buildCitationData === 'function') {
-        commands.push(citationCommand.buildCitationData({ includeCreate: false, includeLookup: true }).toJSON());
+        commands.push(citationCommand.buildCitationData({ includeCreate: false, includeLookup: true, includeRemove: true }).toJSON());
     }
 
     return commands;

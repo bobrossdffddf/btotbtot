@@ -19,6 +19,11 @@ module.exports = {
                 .setRequired(false))
         .addStringOption(option =>
             option
+                .setName('citation_remove_roles')
+                .setDescription('Comma-separated role IDs (or @mentions) allowed to remove citations.')
+                .setRequired(false))
+        .addStringOption(option =>
+            option
                 .setName('citation_economy_guild_id')
                 .setDescription('Main server guild ID where UnbelievaBoat economy fines are deducted from.')
                 .setRequired(false))
@@ -55,17 +60,19 @@ module.exports = {
 
         const citationLogsChannel = interaction.options.getChannel('citation_logs');
         const citationRolesInput = interaction.options.getString('citation_roles');
+        const citationRemoveRolesInput = interaction.options.getString('citation_remove_roles');
         const citationEconomyGuildId = interaction.options.getString('citation_economy_guild_id');
         const ssuChannel = interaction.options.getChannel('ssu_channel');
         const pingRole = interaction.options.getRole('ping_role');
         const logsChannel = interaction.options.getChannel('logs_channel');
 
-        const nothingProvided = !citationLogsChannel && !citationRolesInput && !citationEconomyGuildId
-            && !ssuChannel && !pingRole && !logsChannel;
+        const nothingProvided = !citationLogsChannel && !citationRolesInput && !citationRemoveRolesInput
+            && !citationEconomyGuildId && !ssuChannel && !pingRole && !logsChannel;
 
         if (nothingProvided) {
             const existing = client.settings.get(interaction.guild.id) || {};
-            const allowedRoles = (existing.allowedCitationRoleIds || []).map(id => `<@&${id}>`).join(', ') || 'Not configured';
+            const issueRoles = (existing.allowedCitationRoleIds || []).map(id => `<@&${id}>`).join(', ') || 'Not configured';
+            const removeRoles = (existing.allowedCitationRemoveRoleIds || []).map(id => `<@&${id}>`).join(', ') || 'Not configured';
 
             const statusEmbed = new EmbedBuilder()
                 .setTitle('Current Server Configuration')
@@ -73,7 +80,9 @@ module.exports = {
                 .addFields(
                     { name: '📋 Citation Logs Channel', value: existing.citationLogsChannelId ? `<#${existing.citationLogsChannelId}>` : 'Not configured', inline: true },
                     { name: '🏛️ Citation Economy Guild ID', value: existing.citationEconomyGuildId || 'Not configured', inline: true },
-                    { name: '👮 Citation Roles', value: allowedRoles },
+                    { name: '\u200b', value: '\u200b', inline: true },
+                    { name: '👮 Citation Issue Roles', value: issueRoles },
+                    { name: '🗑️ Citation Remove Roles', value: removeRoles },
                     { name: '📢 SSU Channel', value: existing.ssuChannelId ? `<#${existing.ssuChannelId}>` : 'Not configured', inline: true },
                     { name: '🔔 Ping Role', value: existing.pingRoleId ? `<@&${existing.pingRoleId}>` : 'Not configured', inline: true },
                     { name: '📝 Logs Channel', value: existing.logsChannelId ? `<#${existing.logsChannelId}>` : 'Not configured', inline: true }
@@ -103,6 +112,17 @@ module.exports = {
             updates.allowedCitationRoleIds = parsedRoles;
         }
 
+        if (citationRemoveRolesInput) {
+            const parsedRoles = parseConfiguredRoleIds(citationRemoveRolesInput);
+            if (parsedRoles.length === 0) {
+                return interaction.reply({
+                    content: 'No valid role IDs found in `citation_remove_roles`. Provide comma-separated role IDs or @role mentions.',
+                    flags: 64
+                });
+            }
+            updates.allowedCitationRemoveRoleIds = parsedRoles;
+        }
+
         if (citationEconomyGuildId) {
             const cleanId = citationEconomyGuildId.trim();
             if (!/^\d{17,20}$/.test(cleanId)) {
@@ -121,7 +141,8 @@ module.exports = {
         client.settings.set(guildId, { ...existing, ...updates });
         const saved = client.settings.get(guildId);
 
-        const allowedRoles = (saved.allowedCitationRoleIds || []).map(id => `<@&${id}>`).join(', ') || 'Not configured';
+        const issueRoles = (saved.allowedCitationRoleIds || []).map(id => `<@&${id}>`).join(', ') || 'Not configured';
+        const removeRoles = (saved.allowedCitationRemoveRoleIds || []).map(id => `<@&${id}>`).join(', ') || 'Not configured';
 
         const resultEmbed = new EmbedBuilder()
             .setTitle('✅ Setup Updated')
@@ -129,7 +150,9 @@ module.exports = {
             .addFields(
                 { name: '📋 Citation Logs Channel', value: saved.citationLogsChannelId ? `<#${saved.citationLogsChannelId}>` : 'Not configured', inline: true },
                 { name: '🏛️ Citation Economy Guild ID', value: saved.citationEconomyGuildId || 'Not configured', inline: true },
-                { name: '👮 Citation Roles', value: allowedRoles },
+                { name: '\u200b', value: '\u200b', inline: true },
+                { name: '👮 Citation Issue Roles', value: issueRoles },
+                { name: '🗑️ Citation Remove Roles', value: removeRoles },
                 { name: '📢 SSU Channel', value: saved.ssuChannelId ? `<#${saved.ssuChannelId}>` : 'Not configured', inline: true },
                 { name: '🔔 Ping Role', value: saved.pingRoleId ? `<@&${saved.pingRoleId}>` : 'Not configured', inline: true },
                 { name: '📝 Logs Channel', value: saved.logsChannelId ? `<#${saved.logsChannelId}>` : 'Not configured', inline: true }
