@@ -1,5 +1,5 @@
-const { Events, PermissionFlagsBits } = require('discord.js');
-const { getPlayers, pmPlayer, jailPlayer, getPlayerName, getPlayerId } = require('../api/erlc');
+const { Events, PermissionFlagsBits, ActivityType } = require('discord.js');
+const { getPlayers, getServerInfo, pmPlayer, jailPlayer, getPlayerName, getPlayerId } = require('../api/erlc');
 
 // Track warning counts for players. Key: robloxUsername, Value: warning count
 const vcWarnings = new Map();
@@ -85,6 +85,10 @@ async function runChecks(client) {
         return;
     }
     const inGamePlayers = Array.isArray(inGamePlayersResponse) ? inGamePlayersResponse : [];
+    const serverInfo = await getServerInfo();
+    const queuePlayers = Number(serverInfo?.QueuePlayers || 0);
+    updateBotPresence(client, guild, inGamePlayers.length, queuePlayers);
+
     const hardcodeBypasses = client.settings.get(guild.id, 'hardcodeBypasses') || [];
 
     console.log(`[Checks] Active Players: ${inGamePlayers.length} | Guild Cache: ${guild.members.cache.size}`);
@@ -176,4 +180,18 @@ async function runChecks(client) {
             }
         }
     }
+}
+
+function updateBotPresence(client, guild, inGameCount, queueCount) {
+    if (inGameCount > 4) {
+        client.user.setActivity(`${inGameCount} players online | Queue: ${queueCount}`, {
+            type: ActivityType.Custom,
+        });
+        return;
+    }
+
+    const discordMemberCount = guild.memberCount || guild.members.cache.size;
+    client.user.setActivity(`${discordMemberCount} people in Discord server`, {
+        type: ActivityType.Watching,
+    });
 }
